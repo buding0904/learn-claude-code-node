@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "s01": "bun run agents/s01-the-agent-loop.ts"
+    "test": "bun test",
+    "s01": "bun run agents/s01-the-agent-loop.ts",
+    "s02": "bun run agents/s02-tool-use.ts"
   },
   "keywords": [],
   "author": "",
@@ -13,9 +14,11 @@
   "packageManager": "pnpm@10.12.2",
   "dependencies": {
     "dotenv": "^17.4.0",
-    "openai": "^6.33.0"
+    "openai": "^6.33.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/bun": "^1.3.11",
     "@types/node": "^25.5.0"
   }
 }

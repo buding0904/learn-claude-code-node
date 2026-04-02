@@ -31,6 +31,14 @@ or
 bun run s01
 ```
 
+## 调试
+
+设置环境变量 `DEBUG_MESSAGES=true` 后，程序退出时会将完整的对话历史保存到当前目录，文件名格式为 `chat-MMdd-hhmmss.json`：
+
+```bash
+DEBUG_MESSAGES=true bun run s01
+```
+
 | Session                                        | Topic                     | Motto                                                             |
 | ---------------------------------------------- | ------------------------- | ----------------------------------------------------------------- |
 | [s01](./agents/s01-the-agent-loop.ts)          | The Agent Loop            | _One loop & Bash is all you need_                                 |

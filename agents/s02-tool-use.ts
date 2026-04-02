@@ -1,0 +1,212 @@
+#!/usr/bin/env bun
+// Harness: tool dispatch -- expanding what the model can reach.
+/*
+s02_tool_use.py - Tools
+
+The agent loop from s01 didn't change. We just added tools to the array
+and a dispatch map to route calls.
+
+    +----------+      +-------+      +------------------+
+    |   User   | ---> |  LLM  | ---> | Tool Dispatch    |
+    |  prompt  |      |       |      | {                |
+    +----------+      +---+---+      |   bash: run_bash |
+                          ^          |   read: run_read |
+                          |          |   write: run_wr  |
+                          +----------+   edit: run_edit |
+                          tool_result| }                |
+                                     +------------------+
+
+Key insight: "The loop didn't change at all. I just added tools."
+*/
+
+// load env config
+import 'dotenv/config'
+import assert from 'node:assert'
+import { cwd } from 'node:process'
+import { createInterface } from 'node:readline/promises'
+
+import * as z from 'zod'
+import OpenAI from 'openai'
+
+import { print, execAsync, Tool, dumpHistory, safePath, readFile, writeFile } from './util'
+
+const registerTools = (tools: Tool[]): Map<string, Tool> => {
+  const map = new Map()
+  tools.forEach(tool => {
+    map.set(tool.name, tool)
+  })
+  return map
+}
+
+const WORKDIR = cwd()
+const { API_KEY, BASE_URL, MODEL_NAME } = process.env
+assert(API_KEY, 'API_KEY is not provided, please check the .env file')
+assert(BASE_URL, 'BASE_URL is not provided, please check the .env file')
+assert(MODEL_NAME, 'MODEL_NAME is not provided, please check the .env file')
+
+const client = new OpenAI({
+  apiKey: API_KEY,
+  baseURL: BASE_URL,
+})
+
+const SYSTEM = `You are a coding agent at ${WORKDIR}. Use bash to solve tasks. Act, don't explain.`
+
+const bashTool = new Tool(
+  'bash',
+  'Run a shell command.',
+  z.object({ command: z.string() }),
+  (name, args) => `\x1b[33m${name}: ${args.command} \x1b[0m`,
+  async (args): Promise<string> => {
+    const dangerous = ['rm -rf /', 'sudo', 'shutdown', 'reboot', '> /dev/']
+
+    for (const dangerousCommand of dangerous) {
+      if (args.command.includes(dangerousCommand)) {
+        return 'Error: Dangerous command blocked'
+      }
+    }
+
+    let result = ''
+    try {
+      const { stdout, stderr } = await execAsync(args.command, {
+        cwd: WORKDIR,
+        timeout: 120 * 1000,
+      })
+      result = stdout.trim() + stderr.trim()
+    } catch (err) {
+      result = `Error: ${err}`
+    }
+
+    result = result || '(no output)'
+    return result.trim()
+  }
+)
+
+const readFileTool = new Tool(
+  'read_file',
+  'Read file contents.',
+  z.object({ path: z.string(), limit: z.int().optional() }),
+  (name, args) => `\x1b[33m${name}: ${args.path} \x1b[0m`,
+  async (args): Promise<string> => {
+    try {
+      const text = readFile(safePath(WORKDIR, args.path))
+      let lines = text.split('\n')
+
+      if (args.limit && args.limit < lines.length) {
+        lines = lines.slice(0, args.limit)
+      }
+
+      return lines.join('\n').slice(0, 50000)
+    } catch (e) {
+      return `read_file error: ${e}`
+    }
+  }
+)
+const writeFileTool = new Tool(
+  'write_file',
+  'Write content to file.',
+  z.object({ path: z.string(), content: z.string() }),
+  (name, args) => `\x1b[33m${name}: ${args.path} \x1b[0m`,
+  async (args): Promise<string> => {
+    try {
+      writeFile(safePath(WORKDIR, args.path), args.content)
+      return `Wrote ${args.content.length} lines to ${args.path}`
+    } catch (e) {
+      return `write_file error: ${e}`
+    }
+  }
+)
+const editFileTool = new Tool(
+  'edit_file',
+  'Replace exact text in file.',
+  z.object({ path: z.string(), old_text: z.string(), new_text: z.string() }),
+  (name, args) => `\x1b[33m${name}: ${args.path} \x1b[0m`,
+  async (args): Promise<string> => {
+    try {
+      const fp = safePath(WORKDIR, args.path)
+      const text = readFile(fp)
+      if (!text.includes(args.old_text)) {
+        return `Error: Text not found in ${args.path}`
+      }
+      writeFile(fp, text.replace(args.old_text, args.new_text))
+      return `Edited ${args.path}`
+    } catch (e) {
+      return `edit_file error: ${e}`
+    }
+  }
+)
+
+const TOOLS = registerTools([bashTool, readFileTool, writeFileTool, editFileTool])
+const agentTools: OpenAI.ChatCompletionFunctionTool[] = [...TOOLS.values()].map(tool => {
+  return {
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.schema,
+    },
+  }
+})
+
+const readline = createInterface({
+  input: process.stdin,
+  output: process.stdout,
+})
+
+const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
+  while (true) {
+    const response = await client.chat.completions.create({
+      model: MODEL_NAME,
+      tools: agentTools,
+      messages: [{ role: 'system', content: SYSTEM }, ...messages],
+    })
+
+    const { message, finish_reason } = response.choices[0]
+    // Append assistant turn
+    messages.push({ role: message.role, content: message.content, tool_calls: message.tool_calls })
+
+    if (message.content) {
+      print(message.content.trim())
+    }
+    // If the model didn't call a tool, we're done
+    if (finish_reason !== 'tool_calls' || message.tool_calls == null) {
+      return
+    }
+
+    const toolCalls = message.tool_calls as OpenAI.ChatCompletionMessageFunctionToolCall[]
+
+    // Execute each tool call, collect results
+    const results: OpenAI.ChatCompletionToolMessageParam[] = []
+    for (const toolCall of toolCalls) {
+      let output = ''
+
+      const tool = TOOLS.get(toolCall.function.name)
+      if (tool == null) {
+        output = `Unknown tool: ${toolCall.function.name}`
+      } else {
+        const args = JSON.parse(toolCall.function.arguments)
+        output = await tool.handler(args)
+        print(tool.echo(args))
+        print(`\x1b[32mtool:\x1b[0m ${output.slice(0, 200)}`)
+      }
+
+      results.push({ role: 'tool', tool_call_id: toolCall.id, content: output })
+    }
+    messages.push(...results)
+  }
+}
+
+const history: OpenAI.ChatCompletionMessageParam[] = []
+
+process.on('exit', () => dumpHistory(history))
+process.on('SIGINT', () => process.exit(0))
+
+while (true) {
+  const userPrompt = await readline.question('\x1b[36ms02 >> \x1b[0m')
+
+  if (['q', 'exit', ''].includes(userPrompt.trim().toLowerCase())) {
+    process.exit(0)
+  }
+
+  history.push({ role: 'user', content: userPrompt })
+  await agentLoop(history)
+}

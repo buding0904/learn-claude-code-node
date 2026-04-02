@@ -28,15 +28,11 @@ policy, hooks, and lifecycle controls on top.
 import 'dotenv/config'
 import assert from 'node:assert'
 import { cwd } from 'node:process'
-import { exec, ExecException } from 'node:child_process'
-import { promisify } from 'node:util'
 import { createInterface } from 'node:readline/promises'
 
 import OpenAI from 'openai'
 
-// alias console.log to print
-const print = console.log
-const execAsync = promisify(exec)
+import { dumpHistory, print, execAsync } from './util'
 
 const { API_KEY, BASE_URL, MODEL_NAME } = process.env
 assert(API_KEY, 'API_KEY is not provided, please check the .env file')
@@ -84,11 +80,11 @@ const runBash = async (command: string): Promise<string> => {
     const { stdout, stderr } = await execAsync(command, { cwd: process.cwd(), timeout: 120 * 1000 })
     result = stdout.trim() + stderr.trim()
   } catch (err) {
-    result = `Error: ${(err as ExecException).message.toString()}`
+    result = `Error: ${err}`
   }
 
-  result = result || '(output)'
-  return result
+  result = result || '(no output)'
+  return result.trim()
 }
 
 const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
@@ -104,9 +100,11 @@ const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
     // Append assistant turn
     messages.push({ role: message.role, content: message.content, tool_calls: message.tool_calls })
 
+    if (message.content) {
+      print(message.content.trim())
+    }
     // If the model didn't call a tool, we're done
     if (finish_reason !== 'tool_calls' || message.tool_calls == null) {
-      print(message.content)
       return
     }
 
@@ -130,6 +128,10 @@ const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
 }
 
 const history: OpenAI.ChatCompletionMessageParam[] = []
+
+process.on('exit', () => dumpHistory(history))
+process.on('SIGINT', () => process.exit(0))
+
 while (true) {
   const userPrompt = await readline.question('\x1b[36ms01 >> \x1b[0m')
 
