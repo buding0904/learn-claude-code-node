@@ -1,15 +1,15 @@
 {
   "name": "learn-cc-node",
   "version": "1.0.0",
-  "description": "",
+  "description": "Node.js + TypeScript implementation of learn-claude-code, rewritten from Python using Bun",
   "main": "index.js",
   "scripts": {
     "test": "bun test",
     "s01": "bun run agents/s01-the-agent-loop.ts",
     "s02": "bun run agents/s02-tool-use.ts"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["ai-agent", "claude", "typescript", "bun", "llm", "tool-use"],
+  "author": "buding0904",
   "license": "ISC",
   "packageManager": "pnpm@10.12.2",
   "dependencies": {
