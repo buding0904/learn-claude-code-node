@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
-// Harness: the loop -- the model's first connection to the real world.
 /*
 s01_agent_loop.py - The Agent Loop
+Harness: the loop -- the model's first connection to the real world.
 
 The entire secret of an AI coding agent in one pattern:
 

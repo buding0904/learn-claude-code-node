@@ -6,9 +6,17 @@
   "scripts": {
     "test": "bun test",
     "s01": "bun run agents/s01-the-agent-loop.ts",
-    "s02": "bun run agents/s02-tool-use.ts"
+    "s02": "bun run agents/s02-tool-use.ts",
+    "s03": "bun run agents/s03-todo-write.ts"
   },
-  "keywords": ["ai-agent", "claude", "typescript", "bun", "llm", "tool-use"],
+  "keywords": [
+    "ai-agent",
+    "claude",
+    "typescript",
+    "bun",
+    "llm",
+    "tool-use"
+  ],
   "author": "buding0904",
   "license": "ISC",
   "packageManager": "pnpm@10.12.2",

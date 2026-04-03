@@ -1,22 +1,30 @@
 #!/usr/bin/env bun
 /*
-s02_tool_use.py - Tools
-Harness: tool dispatch -- expanding what the model can reach.
+s03_todo_write.py - TodoWrite
+Harness: planning -- keeping the model on course without scripting the route.
 
-The agent loop from s01 didn't change. We just added tools to the array
-and a dispatch map to route calls.
+The model tracks its own progress via a TodoManager. A nag reminder
+forces it to keep updating when it forgets.
 
-    +----------+      +-------+      +------------------+
-    |   User   | ---> |  LLM  | ---> | Tool Dispatch    |
-    |  prompt  |      |       |      | {                |
-    +----------+      +---+---+      |   bash: run_bash |
-                          ^          |   read: run_read |
-                          |          |   write: run_wr  |
-                          +----------+   edit: run_edit |
-                          tool_result| }                |
-                                     +------------------+
+    +----------+      +-------+      +---------+
+    |   User   | ---> |  LLM  | ---> | Tools   |
+    |  prompt  |      |       |      | + todo  |
+    +----------+      +---+---+      +----+----+
+                          ^               |
+                          |   tool_result |
+                          +---------------+
+                                |
+                    +-----------+-----------+
+                    | TodoManager state     |
+                    | [ ] task A            |
+                    | [>] task B <- doing   |
+                    | [x] task C            |
+                    +-----------------------+
+                                |
+                    if rounds_since_todo >= 3:
+                      inject <reminder>
 
-Key insight: "The loop didn't change at all. I just added tools."
+Key insight: "The agent can track its own progress -- and I can see it."
 */
 
 // load env config
@@ -60,6 +68,71 @@ const registerTools = (tools: Tool[]): Map<string, Tool> => {
   return map
 }
 
+// -- TodoManager: structured state the LLM writes to --
+const todoItem = z.object({
+  id: z.string(),
+  text: z.string(),
+  status: z.enum(['pending', 'in_progress', 'completed']),
+})
+
+type TodoItem = z.infer<typeof todoItem>
+
+class TodoManager {
+  items: TodoItem[] = []
+
+  update(items: TodoItem[]) {
+    if (items.length > 20) {
+      throw 'Max 20 todos allowed'
+    }
+    const validated: TodoItem[] = []
+    let inProgressCount = 0
+
+    items.forEach((item, i) => {
+      const todo = {
+        text: item.text.trim() || '',
+        status: item.status.toLocaleLowerCase() || 'pending',
+        id: item.id || (i + 1).toString(),
+      }
+
+      const result = todoItem.safeParse(todo)
+      if (!result.success) {
+        throw `Item ${todo.id}: ${result.error.message}`
+      }
+
+      if (result.data.status === 'in_progress') {
+        inProgressCount++
+      }
+      validated.push(result.data)
+    })
+
+    if (inProgressCount > 1) {
+      throw 'Only one task can be in_progress at a time'
+    }
+    this.items = validated
+
+    return this.render()
+  }
+
+  render() {
+    if (this.items.length === 0) {
+      return 'No todos.'
+    }
+
+    const lines = []
+    for (const item of this.items) {
+      const marker = {
+        pending: '[ ]',
+        in_progress: '[>]',
+        completed: '[x]',
+      }[item.status]
+      lines.push(`${marker} #${item.id}: ${item.text}`)
+    }
+    return lines.join('\n')
+  }
+}
+
+const TODO = new TodoManager()
+
 const WORKDIR = cwd()
 const { API_KEY, BASE_URL, MODEL_NAME } = process.env
 assert(API_KEY, 'API_KEY is not provided, please check the .env file')
@@ -71,7 +144,9 @@ const client = new OpenAI({
   baseURL: BASE_URL,
 })
 
-const SYSTEM = `You are a coding agent at ${WORKDIR}. Use bash to solve tasks. Act, don't explain.`
+const SYSTEM = `You are a coding agent at ${WORKDIR}.
+Use the todo tool to plan multi-step tasks. Mark in_progress before starting, completed when done.
+Prefer tools over prose.`
 
 const bashTool = new Tool(
   'bash',
@@ -161,7 +236,17 @@ const editFileTool = new Tool(
   }
 )
 
-const TOOLS = registerTools([bashTool, readFileTool, writeFileTool, editFileTool])
+const todoTool = new Tool(
+  'todo',
+  'Update task list. Track progress on multi-step tasks.',
+  z.object({ items: z.array(todoItem) }),
+  async (name, args) => {
+    print(`\x1b[33m${name}: update todos \x1b[0m`)
+    return TODO.update(args.items)
+  }
+)
+
+const TOOLS = registerTools([bashTool, readFileTool, writeFileTool, editFileTool, todoTool])
 const agentTools: OpenAI.ChatCompletionFunctionTool[] = [...TOOLS.values()].map(tool => {
   return {
     type: 'function',
@@ -179,6 +264,8 @@ const readline = createInterface({
 })
 
 const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
+  let roundsSinceTodo = 0
+
   while (true) {
     const response = await client.chat.completions.create({
       model: MODEL_NAME,
@@ -201,7 +288,11 @@ const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
     const toolCalls = message.tool_calls as OpenAI.ChatCompletionMessageFunctionToolCall[]
 
     // Execute each tool call, collect results
-    const results: OpenAI.ChatCompletionToolMessageParam[] = []
+    const results: (
+      | OpenAI.ChatCompletionToolMessageParam
+      | OpenAI.ChatCompletionUserMessageParam
+    )[] = []
+    let usedTodo = false
     for (const toolCall of toolCalls) {
       let output = ''
 
@@ -212,9 +303,17 @@ const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
         const args = JSON.parse(toolCall.function.arguments)
         output = await tool.exec(args)
         print(`\x1b[32mtool:\x1b[0m ${output.slice(0, 200)}`)
-      }
 
+        if (tool.name === 'todo') {
+          usedTodo = true
+        }
+      }
       results.push({ role: 'tool', tool_call_id: toolCall.id, content: output })
+    }
+
+    roundsSinceTodo = usedTodo ? 0 : roundsSinceTodo + 1
+    if (roundsSinceTodo >= 3) {
+      results.push({ role: 'user', content: '<reminder>Update your todos.</reminder>' })
     }
     messages.push(...results)
   }
