@@ -3,7 +3,6 @@ import fs from 'node:fs'
 import { promisify } from 'node:util'
 import { exec } from 'node:child_process'
 
-import * as z from 'zod'
 import OpenAI from 'openai'
 
 // alias console.log to print
@@ -14,29 +13,6 @@ export const writeFile = (p: string, content: string) => {
   const dirpath = path.dirname(p)
   fs.mkdirSync(dirpath, { recursive: true })
   fs.writeFileSync(p, content)
-}
-
-export class Tool<T extends z.ZodObject = z.ZodObject> {
-  schema: Pick<z.core.ZodStandardJSONSchemaPayload<T>, 'type' | 'properties' | 'required'>
-
-  constructor(
-    public name: string,
-    public description: string,
-    public parameters: T,
-    private _echo: (name: string, args: z.infer<T>) => string,
-    public handler: (args: z.infer<T>) => Promise<string>
-  ) {
-    const schema = z.toJSONSchema(this.parameters, { target: 'draft-04' })
-    this.schema = {
-      type: schema.type,
-      properties: schema.properties,
-      required: schema.required,
-    }
-  }
-
-  echo(args: z.infer<T>): string {
-    return this._echo(this.name, args)
-  }
 }
 
 export const safePath = (cwd: string, p: string): string => {

@@ -28,7 +28,29 @@ import { createInterface } from 'node:readline/promises'
 import * as z from 'zod'
 import OpenAI from 'openai'
 
-import { print, execAsync, Tool, dumpHistory, safePath, readFile, writeFile } from './util'
+import { print, execAsync, dumpHistory, safePath, readFile, writeFile } from './util'
+
+export class Tool<T extends z.ZodObject = z.ZodObject> {
+  schema: Pick<z.core.ZodStandardJSONSchemaPayload<T>, 'type' | 'properties' | 'required'>
+
+  constructor(
+    public name: string,
+    public description: string,
+    public parameters: T,
+    public _exec: (name: string, args: z.infer<T>) => Promise<string>
+  ) {
+    const schema = z.toJSONSchema(this.parameters, { target: 'draft-04' })
+    this.schema = {
+      type: schema.type,
+      properties: schema.properties,
+      required: schema.required,
+    }
+  }
+
+  exec(args: z.infer<T>) {
+    return this._exec(this.name, args)
+  }
+}
 
 const registerTools = (tools: Tool[]): Map<string, Tool> => {
   const map = new Map()
@@ -55,8 +77,9 @@ const bashTool = new Tool(
   'bash',
   'Run a shell command.',
   z.object({ command: z.string() }),
-  (name, args) => `\x1b[33m${name}: ${args.command} \x1b[0m`,
-  async (args): Promise<string> => {
+  async (name, args) => {
+    print(`\x1b[33m${name}: ${args.command} \x1b[0m`)
+
     const dangerous = ['rm -rf /', 'sudo', 'shutdown', 'reboot', '> /dev/']
 
     for (const dangerousCommand of dangerous) {
@@ -85,8 +108,9 @@ const readFileTool = new Tool(
   'read_file',
   'Read file contents.',
   z.object({ path: z.string(), limit: z.int().optional() }),
-  (name, args) => `\x1b[33m${name}: ${args.path} \x1b[0m`,
-  async (args): Promise<string> => {
+  async (name, args) => {
+    print(`\x1b[33m${name}: ${args.path} \x1b[0m`)
+
     try {
       const text = readFile(safePath(WORKDIR, args.path))
       let lines = text.split('\n')
@@ -105,8 +129,9 @@ const writeFileTool = new Tool(
   'write_file',
   'Write content to file.',
   z.object({ path: z.string(), content: z.string() }),
-  (name, args) => `\x1b[33m${name}: ${args.path} \x1b[0m`,
-  async (args): Promise<string> => {
+  async (name, args) => {
+    print(`\x1b[33m${name}: ${args.path} \x1b[0m`)
+
     try {
       writeFile(safePath(WORKDIR, args.path), args.content)
       return `Wrote ${args.content.length} lines to ${args.path}`
@@ -119,8 +144,9 @@ const editFileTool = new Tool(
   'edit_file',
   'Replace exact text in file.',
   z.object({ path: z.string(), old_text: z.string(), new_text: z.string() }),
-  (name, args) => `\x1b[33m${name}: ${args.path} \x1b[0m`,
-  async (args): Promise<string> => {
+  async (name, args) => {
+    print(`\x1b[33m${name}: ${args.path} \x1b[0m`)
+
     try {
       const fp = safePath(WORKDIR, args.path)
       const text = readFile(fp)
@@ -184,8 +210,7 @@ const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
         output = `Unknown tool: ${toolCall.function.name}`
       } else {
         const args = JSON.parse(toolCall.function.arguments)
-        output = await tool.handler(args)
-        print(tool.echo(args))
+        output = await tool.exec(args)
         print(`\x1b[32mtool:\x1b[0m ${output.slice(0, 200)}`)
       }
 
