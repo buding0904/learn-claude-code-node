@@ -42,7 +42,7 @@ DEBUG_MESSAGES=true bun run s01
 - [x] [s01](./agents/s01-the-agent-loop.ts) — The Agent Loop: _One loop & Bash is all you need_
 - [x] [s02](./agents/s02-tool-use.ts) — Tool Use: _Adding a tool means adding one handler_
 - [x] [s03](./agents/s03-todo-write.ts) — TodoWrite: _An agent without a plan drifts_
-- [ ] s04 — Subagents: _Break big tasks down; each subtask gets a clean context_
+- [x] [s04](./agents/s04-subagent.ts) — Subagents: _Break big tasks down; each subtask gets a clean context_
 - [ ] s05 — Skills: _Load knowledge when you need it, not upfront_
 - [ ] s06 — Context Compact: _Context will fill up; you need a way to make room_
 - [ ] s07 — Tasks: _Break big goals into small tasks, order them, persist to disk_

@@ -7,7 +7,8 @@
     "test": "bun test",
     "s01": "bun run agents/s01-the-agent-loop.ts",
     "s02": "bun run agents/s02-tool-use.ts",
-    "s03": "bun run agents/s03-todo-write.ts"
+    "s03": "bun run agents/s03-todo-write.ts",
+    "s04": "bun run agents/s04-subagent.ts"
   },
   "keywords": [
     "ai-agent",
