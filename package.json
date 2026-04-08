@@ -8,7 +8,8 @@
     "s01": "bun run agents/s01-the-agent-loop.ts",
     "s02": "bun run agents/s02-tool-use.ts",
     "s03": "bun run agents/s03-todo-write.ts",
-    "s04": "bun run agents/s04-subagent.ts"
+    "s04": "bun run agents/s04-subagent.ts",
+    "s05": "bun run agents/s05-skill-loading.ts"
   },
   "keywords": [
     "ai-agent",
@@ -24,6 +25,7 @@
   "dependencies": {
     "dotenv": "^17.4.0",
     "openai": "^6.33.0",
+    "yaml": "^2.8.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {

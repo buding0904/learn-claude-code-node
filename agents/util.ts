@@ -34,3 +34,22 @@ export const dumpHistory = (history: OpenAI.ChatCompletionMessageParam[]) => {
 
   print(`\x1b[90m[debug] history saved to ${filename}\x1b[0m`)
 }
+
+export const rglob = (dir: string, pattern: string) => {
+  const results: string[] = []
+  const walk = (dir: string) => {
+    const files = fs.readdirSync(dir, { withFileTypes: true })
+    for (const file of files) {
+      const fullPath = path.join(dir, file.name)
+      if (file.isDirectory()) {
+        walk(fullPath)
+      } else if (file.name === pattern) {
+        results.push(fullPath)
+      }
+    }
+  }
+
+  walk(dir)
+
+  return results.sort()
+}

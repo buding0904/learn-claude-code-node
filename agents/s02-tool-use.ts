@@ -30,7 +30,7 @@ import OpenAI from 'openai'
 
 import { print, execAsync, dumpHistory, safePath, readFile, writeFile } from './util'
 
-export class Tool<T extends z.ZodObject = z.ZodObject> {
+class Tool<T extends z.ZodObject = z.ZodObject> {
   schema: Pick<z.core.ZodStandardJSONSchemaPayload<T>, 'type' | 'properties' | 'required'>
 
   constructor(
