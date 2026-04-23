@@ -34,6 +34,12 @@ import OpenAI from 'openai'
 
 import { print, execAsync, dumpHistory, safePath, readFile, writeFile } from './util'
 
+type Message = OpenAI.ChatCompletionMessageParam
+type ToolMessage = OpenAI.ChatCompletionToolMessageParam
+type UserMessage = OpenAI.ChatCompletionUserMessageParam
+type ToolCall = OpenAI.ChatCompletionMessageFunctionToolCall
+type FunctionTool = OpenAI.ChatCompletionFunctionTool
+
 class Tool<T extends z.ZodObject = z.ZodObject> {
   schema: Pick<z.core.ZodStandardJSONSchemaPayload<T>, 'type' | 'properties' | 'required'>
 
@@ -168,7 +174,7 @@ const editFileTool = new Tool(
 )
 
 const runSubagent = async (prompt: string) => {
-  const subMessages: OpenAI.ChatCompletionMessageParam[] = [{ role: 'user', content: prompt }]
+  const subMessages: Message[] = [{ role: 'user', content: prompt }]
   const limit = 30
 
   // safety limit
@@ -197,13 +203,10 @@ const runSubagent = async (prompt: string) => {
       break
     }
 
-    const toolCalls = message.tool_calls as OpenAI.ChatCompletionMessageFunctionToolCall[]
+    const toolCalls = message.tool_calls as ToolCall[]
 
     // Execute each tool call, collect results
-    const results: (
-      | OpenAI.ChatCompletionToolMessageParam
-      | OpenAI.ChatCompletionUserMessageParam
-    )[] = []
+    const results: (ToolMessage | UserMessage)[] = []
     for (const toolCall of toolCalls) {
       let output = ''
 
@@ -241,7 +244,7 @@ const taskTool = new Tool(
   }
 )
 
-const getToolsDeclaration = (tools: Tool[]): OpenAI.ChatCompletionFunctionTool[] =>
+const getToolsDeclaration = (tools: Tool[]): FunctionTool[] =>
   tools.map(tool => {
     return {
       type: 'function',
@@ -265,7 +268,7 @@ const readline = createInterface({
   output: process.stdout,
 })
 
-const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
+const agentLoop = async (messages: Message[]) => {
   while (true) {
     const response = await client.chat.completions.create({
       model: MODEL_NAME,
@@ -285,13 +288,10 @@ const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
       return
     }
 
-    const toolCalls = message.tool_calls as OpenAI.ChatCompletionMessageFunctionToolCall[]
+    const toolCalls = message.tool_calls as ToolCall[]
 
     // Execute each tool call, collect results
-    const results: (
-      | OpenAI.ChatCompletionToolMessageParam
-      | OpenAI.ChatCompletionUserMessageParam
-    )[] = []
+    const results: (ToolMessage | UserMessage)[] = []
     for (const toolCall of toolCalls) {
       let output = ''
 
@@ -310,7 +310,7 @@ const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
   }
 }
 
-const history: OpenAI.ChatCompletionMessageParam[] = []
+const history: Message[] = []
 
 process.on('exit', () => dumpHistory(history))
 process.on('SIGINT', () => process.exit(0))

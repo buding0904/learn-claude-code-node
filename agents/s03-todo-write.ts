@@ -38,6 +38,12 @@ import OpenAI from 'openai'
 
 import { print, execAsync, dumpHistory, safePath, readFile, writeFile } from './util'
 
+type Message = OpenAI.ChatCompletionMessageParam
+type ToolMessage = OpenAI.ChatCompletionToolMessageParam
+type UserMessage = OpenAI.ChatCompletionUserMessageParam
+type ToolCall = OpenAI.ChatCompletionMessageFunctionToolCall
+type FunctionTool = OpenAI.ChatCompletionFunctionTool
+
 class Tool<T extends z.ZodObject = z.ZodObject> {
   schema: Pick<z.core.ZodStandardJSONSchemaPayload<T>, 'type' | 'properties' | 'required'>
 
@@ -247,7 +253,7 @@ const todoTool = new Tool(
 )
 
 const TOOLS = registerTools([bashTool, readFileTool, writeFileTool, editFileTool, todoTool])
-const agentTools: OpenAI.ChatCompletionFunctionTool[] = [...TOOLS.values()].map(tool => {
+const agentTools: FunctionTool[] = [...TOOLS.values()].map(tool => {
   return {
     type: 'function',
     function: {
@@ -263,7 +269,7 @@ const readline = createInterface({
   output: process.stdout,
 })
 
-const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
+const agentLoop = async (messages: Message[]) => {
   let roundsSinceTodo = 0
 
   while (true) {
@@ -285,13 +291,10 @@ const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
       return
     }
 
-    const toolCalls = message.tool_calls as OpenAI.ChatCompletionMessageFunctionToolCall[]
+    const toolCalls = message.tool_calls as ToolCall[]
 
     // Execute each tool call, collect results
-    const results: (
-      | OpenAI.ChatCompletionToolMessageParam
-      | OpenAI.ChatCompletionUserMessageParam
-    )[] = []
+    const results: (ToolMessage | UserMessage)[] = []
     let usedTodo = false
     for (const toolCall of toolCalls) {
       let output = ''
@@ -319,7 +322,7 @@ const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
   }
 }
 
-const history: OpenAI.ChatCompletionMessageParam[] = []
+const history: Message[] = []
 
 process.on('exit', () => dumpHistory(history))
 process.on('SIGINT', () => process.exit(0))

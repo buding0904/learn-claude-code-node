@@ -34,6 +34,10 @@ import OpenAI from 'openai'
 
 import { dumpHistory, print, execAsync } from './util'
 
+type Message = OpenAI.ChatCompletionMessageParam
+type ToolCall = OpenAI.ChatCompletionMessageFunctionToolCall
+type FunctionTool = OpenAI.ChatCompletionFunctionTool
+
 const { API_KEY, BASE_URL, MODEL_NAME } = process.env
 assert(API_KEY, 'API_KEY is not provided, please check the .env file')
 assert(BASE_URL, 'BASE_URL is not provided, please check the .env file')
@@ -41,7 +45,7 @@ assert(MODEL_NAME, 'MODEL_NAME is not provided, please check the .env file')
 
 const SYSTEM = `You are a coding agent at ${cwd()}. Use bash to solve tasks. Act, don't explain.`
 
-const TOOLS: OpenAI.ChatCompletionFunctionTool[] = [
+const TOOLS: FunctionTool[] = [
   {
     type: 'function',
     function: {
@@ -87,7 +91,7 @@ const runBash = async (command: string): Promise<string> => {
   return result.trim()
 }
 
-const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
+const agentLoop = async (messages: Message[]) => {
   while (true) {
     const response = await client.chat.completions.create({
       model: MODEL_NAME,
@@ -108,10 +112,10 @@ const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
       return
     }
 
-    const toolCalls = message.tool_calls as OpenAI.ChatCompletionMessageFunctionToolCall[]
+    const toolCalls = message.tool_calls as ToolCall[]
 
     // Execute each tool call, collect results
-    const results: OpenAI.ChatCompletionToolMessageParam[] = []
+    const results: Message[] = []
     for (const toolCall of toolCalls) {
       if (toolCall.function.name === 'bash') {
         const args = JSON.parse(toolCall.function.arguments)
@@ -127,7 +131,7 @@ const agentLoop = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
   }
 }
 
-const history: OpenAI.ChatCompletionMessageParam[] = []
+const history: Message[] = []
 
 process.on('exit', () => dumpHistory(history))
 process.on('SIGINT', () => process.exit(0))

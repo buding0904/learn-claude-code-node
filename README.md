@@ -44,7 +44,7 @@ DEBUG_MESSAGES=true bun run s01
 - [x] [s03](./agents/s03-todo-write.ts) — TodoWrite: _An agent without a plan drifts_
 - [x] [s04](./agents/s04-subagent.ts) — Subagents: _Break big tasks down; each subtask gets a clean context_
 - [x] [s05](./agents/s05-skill-loading.ts) — Skills: _Load knowledge when you need it, not upfront_
-- [ ] s06 — Context Compact: _Context will fill up; you need a way to make room_
+- [x] [s06](./agents/s06-context-compact.ts) — Context Compact: _Context will fill up; you need a way to make room_
 - [ ] s07 — Tasks: _Break big goals into small tasks, order them, persist to disk_
 - [ ] s08 — Background Tasks: _Run slow operations in the background; the agent keeps thinking_
 - [ ] s09 — Agent Teams: _When the task is too big for one, delegate to teammates_
