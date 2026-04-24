@@ -1,0 +1,8 @@
+{
+  "id": 4,
+  "subject": "parse",
+  "description": "Parse input data and create AST (Abstract Syntax Tree)",
+  "status": "pending",
+  "blockedBy": [],
+  "owner": ""
+}

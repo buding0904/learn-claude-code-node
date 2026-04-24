@@ -10,7 +10,8 @@
     "s03": "bun run agents/s03-todo-write.ts",
     "s04": "bun run agents/s04-subagent.ts",
     "s05": "bun run agents/s05-skill-loading.ts",
-    "s06": "bun run agents/s06-context-compact.ts"
+    "s06": "bun run agents/s06-context-compact.ts",
+    "s07": "bun run agents/s07-task-system.ts"
   },
   "keywords": [
     "ai-agent",

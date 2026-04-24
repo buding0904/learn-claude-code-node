@@ -37,13 +37,14 @@ export const dumpHistory = (history: OpenAI.ChatCompletionMessageParam[]) => {
 
 export const rglob = (dir: string, pattern: string) => {
   const results: string[] = []
+  const regex = new RegExp(`^${pattern}$`)
   const walk = (dir: string) => {
     const files = fs.readdirSync(dir, { withFileTypes: true })
     for (const file of files) {
       const fullPath = path.join(dir, file.name)
       if (file.isDirectory()) {
         walk(fullPath)
-      } else if (file.name === pattern) {
+      } else if (regex.test(path.basename(fullPath))) {
         results.push(fullPath)
       }
     }
@@ -52,4 +53,12 @@ export const rglob = (dir: string, pattern: string) => {
   walk(dir)
 
   return results.sort()
+}
+
+export const sortBy = <T>(arr: T[], getter: ((v: T) => keyof T) | keyof T) => {
+  return [...arr].sort((a, b) => {
+    const valA = typeof getter === 'function' ? getter(a) : a[getter]
+    const valB = typeof getter === 'function' ? getter(b) : b[getter]
+    return valA > valB ? 1 : valA < valB ? -1 : 0
+  })
 }
